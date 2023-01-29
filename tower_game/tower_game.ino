@@ -6,13 +6,13 @@
 #include <SoftPWM.h>
 #include <LiquidCrystal.h>
 
+// Wand IDs
 #define SARAH 1208563073
 #define EMILY 1207239425
 
-#define PULSE_STEP 35
-#define PULSE_TIME 10
+#define BLINK_TIME 800
 
-#define IR_PIN A1
+#define IR_PIN A0
 
 #define RS_PIN 12
 #define ENABLE_PIN 11
@@ -32,8 +32,8 @@ byte heart[8] = {
   0b00000
 };
 
-int sarah_pins[3] = {6, 5, 3};
-int emily_pins[3] = {9, 10, 13};
+int sarah_pins[3] = {A4, A5, 3};
+int emily_pins[3] = {A1, A2, A3};
 
 // States
 #define WAND_NON_OWNER 1
@@ -59,9 +59,8 @@ int sarah_score = 0;
 uint32_t timer_started;
 int seconds_since_start;
 uint32_t cooldown_expires;
-uint32_t last_pulse;
-int volts = 0;
-bool l_up = true;
+uint32_t last_blink;
+int blink;
 
 State unclaimed = State(&do_nothing, &wait_for_wand, NULL);
 State level_up = State(&level_up_entry, &level_up_entry_update, NULL);
@@ -107,9 +106,8 @@ void wait_for_wand() {
 
 void initialize_cooldown(int duration) {
     seconds_since_start = 0;
-    last_pulse = 0;
-    volts = 0;
-    fade_up = true;
+    last_blink = 0;
+    blink = HIGH;
     timer_started = millis();
     cooldown_expires = timer_started + duration;
 }
@@ -161,39 +159,16 @@ void level_up_cooldown_entry() {
   initialize_cooldown(LEVEL_UP_COOLDOWN_DURATION);
 }
 
-void pulse_led() {
+void blink_led() {
   int current = millis();
-  if ((current - last_pulse) > PULSE_TIME) {
-    last_pulse = current;
-    if (fade_up) {
-      volts += PULSE_STEP;
-      if (volts >= 0xff) {
-        volts = 0xff;
-        fade_up = false;
-      }
-    } else {
-      volts -= PULSE_STEP;
-      if (volts <= 0) {
-        volts = 0;
-        fade_up = true;
-      }
-    }
-    if (owner == EMILY) {
-      //SoftPWMSet(emily_pins[level-1], volts);
-      analogWrite(emily_pins[level-1], volts);
-    }
-    else {
-      if (false) {
-        Serial.print("set pin ");
-        Serial.print(sarah_pins[level-1]);
-        Serial.print(" to ");
-        Serial.println(volts);
-      }
-      analogWrite(sarah_pins[level-1], volts);
-      //SoftPWMSet(sarah_pins[level-1], volts);
-    }
+  if ((current - last_blink) > BLINK_TIME) {
+    last_blink = current;
+    int pin = owner == EMILY ? emily_pins[level-1] : sarah_pins[level-1];
+    digitalWrite(pin, blink);
+    blink = blink == HIGH ? LOW : HIGH;
   }
 }
+
 
 void level_up_cooling_down() {
   // long wand = check_wand();
@@ -211,7 +186,7 @@ void level_up_cooling_down() {
     set_led_for_owner(level);
     stateMachine.trigger(COOLDOWN_EXPIRED);
   } else {
-    pulse_led();
+    blink_led();
   }
 }
 
@@ -256,7 +231,7 @@ void level_down_cooling_down() {
     set_led_for_owner(level);
     stateMachine.trigger(COOLDOWN_EXPIRED);
   } else {
-    pulse_led();
+    blink_led();
   }
 }
 
@@ -278,7 +253,7 @@ void setup_lcd() {
   sbc_lcd.print("Shadow");
   
   sbc_lcd.setCursor(1, 1);
-  sbc_lcd.print("Red Cat");
+  sbc_lcd.print("Black Cat");
 }
 
 void setup() {
